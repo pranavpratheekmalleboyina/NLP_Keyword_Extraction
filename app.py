@@ -65,12 +65,23 @@ def extract_keywords():
         file.read().decode('utf-8',errors='ignore')      
         cleaned_file = preprocess_text(file) 
         keywords = get_keywords(cleaned_file,20)
-    return render_template('keywords.html',keywords=keywords)    
+    return render_template('keywords.html',keywords=keywords)  
+    return render_template('index.html')  
 
 @app.route('/search_keywords',methods=['POST','GET'])
 def search_keywords():
-    pass
-
+    search_query = request.form['search']
+    if search_query:
+      keywords = []         #if the search query is not empty
+      for keyword in feature_names:
+        keywords.append(keyword)
+        if len(keywords) == 20:  #the limit for the keywords is 20
+          break
+      print(keywords)
+      return render_template('keywords.html',keywords=keywords)  
+    else:      
+      return render_template('index.html')    #in case the search query is empty
+        
 #main function
 if __name__ == "__main__":
     app.run(debug=True)

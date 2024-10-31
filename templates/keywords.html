@@ -18,6 +18,14 @@
            <th>Score</th>
          </tr>
        </thead>
+       <tbody>
+        {% for keyword,score in keywords.items() %}
+         <tr>
+           <td>{{keyword}}</td>
+           <td>{{score}}</td>
+         </tr>
+        {% endfor %}
+       </tbody>
        </table>
       </h3>
     </div>

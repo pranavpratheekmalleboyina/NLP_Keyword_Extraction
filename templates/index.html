@@ -27,7 +27,7 @@
     <h1 class="text-center text-green">
       Keywords Extraction app 
     </h1>
-    <form method="/extract_keywords" method="post"> 
+    <form method="/extract_keywords" method="post" enctype="multipart/form-data"> 
      <div class="form-group">
        <label for="file">Enter the text to be analyzed</label>
        <input type="file" class="form-control" id="file" name="file">
@@ -35,7 +35,7 @@
      <button type="submit" class="btn btn-primary">Extract Keywords</button>
     </form>
     <br>
-    <form method="/search_keywords" method="post"> 
+    <form method="/search_keywords" method="post" enctype="multipart/form-data"> 
       <div class="form-group">
         <label for="file">Search for Keywords</label>
         <input type="text" class="form-control" id="file" name="search">
