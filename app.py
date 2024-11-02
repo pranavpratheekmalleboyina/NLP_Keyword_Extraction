@@ -1,87 +1,98 @@
 import pickle
-from flask import Flask,request,render_template
+from flask import Flask, request, render_template
 import re
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 
-#Creating the Flask app object
+# Load NLTK dependencies
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+# Creating the Flask app object
 app = Flask(__name__)
 
-#loading the models
-count_vector = pickle.load(open('count_vector.pkl','rb'))
-feature_names = pickle.load(open('feature_names.pkl','rb'))
-tfidfTransformer = pickle.load(open('tfidfTransformer.pkl','rb'))
+try:
+    # Loading the models
+    count_vector = pickle.load(open('count_vector.pkl', 'rb'))
+    feature_names = pickle.load(open('feature_names.pkl', 'rb'))
+    tfidf_transformer = pickle.load(open('tfidf_transformer.pkl', 'rb'))
+    
+    # Ensure feature_names is a non-empty list
+    if feature_names is None or not isinstance(feature_names, list) or len(feature_names) == 0:
+        raise ValueError("Feature names are either missing or not loaded correctly. Check the model files.")
 
+except FileNotFoundError as e:
+    print("Model file not found:", e)
+except ValueError as e:
+    print("Model data error:", e)
+except Exception as e:
+    print("An unexpected error occurred:", e)
+
+# Define stopwords
 stop_words = set(stopwords.words('english'))
-new_words = ["fig","figure","image","sample","using","show","result",
-             "large","also","one","two","three","four","five","seven","eight","nine"]
+new_words = ["fig", "figure", "image", "sample", "using", "show", "result",
+             "large", "also", "one", "two", "three", "four", "five", "seven", "eight", "nine"]
 stop_words = list(stop_words.union(new_words))
 
-#let us define the routes
+# Define routes
 @app.route('/')
 def index():
     return render_template('index.html')
 
-def get_keywords(docs,topN):
-  docs_word_count = tfidfTransformer.transform(count_vector.transform([docs[idx]]))
-  #build sparse matrix
-  docs_word_count = docs_word_count.tocoo()
-  tuples = zip(docs_word_count.col,docs_word_count.data)
-  sorted_items = sorted(tuples,key = lambda x: (x[1],x[0]),reverse=True)
+def get_keywords(docs, topN):
+    # Transform document to get word counts
+    docs_word_count = tfidf_transformer.transform(count_vector.transform([docs]))  # Pass `docs` in a list
+    docs_word_count = docs_word_count.tocoo()  # Convert to COO sparse matrix
+    tuples = zip(docs_word_count.col, docs_word_count.data)
+    sorted_items = sorted(tuples, key=lambda x: (x[1], x[0]), reverse=True)[:topN]
 
-  sorted_items = sorted_items[:topN]
-  score_vals = []
-  feature_vals = []
-  for idx, score in sorted_items:
-    score_vals.append(round(score,3))
-    feature_vals.append(feature_names[idx])
+    # Extract top N keywords
+    results = {feature_names[idx]: round(score, 3) for idx, score in sorted_items}
+    return results
 
-  results = {}
-  for idx in range(len(feature_vals)):
-    results[feature_vals[idx]] = score_vals[idx]
-  return results
-
-#custom functions
+# Custom text preprocessing function
 def preprocess_text(text):
-  if isinstance(text, float): 
-    text = str(text)
-  text = text.lower()
-  text = re.sub(r'<.*?>',' ',text)
-  text = re.sub(r'[^a-zA-Z]',' ',text)
-  text = nltk.word_tokenize(text)
-  text = [word for word in text if word not in stop_words]
-  text = [word for word in text if len(word) >= 3]
-  stemming = PorterStemmer()
-  text = [stemming.stem(word) for word in text]
-  return ' '.join(text)
+    if isinstance(text, float): 
+        text = str(text)
+    text = text.lower()
+    text = re.sub(r'<.*?>', ' ', text)
+    text = re.sub(r'[^a-zA-Z]', ' ', text)
+    text = nltk.word_tokenize(text)
+    text = [PorterStemmer().stem(word) for word in text if word not in stop_words and len(word) >= 3]
+    return ' '.join(text)
 
-@app.route('/extract_keywords',methods=['POST','GET'])
+@app.route('/extract_keywords', methods=['POST', 'GET'])
 def extract_keywords():
-    file = request.file['file']
-    if file.filename == '':
-        return render_template('index.html',error="No file selected")
-    if file:
-        file.read().decode('utf-8',errors='ignore')      
-        cleaned_file = preprocess_text(file) 
-        keywords = get_keywords(cleaned_file,20)
-    return render_template('keywords.html',keywords=keywords)  
-    return render_template('index.html')  
+    file = request.files.get('file')
+    if not file or file.filename == '':
+        return render_template('index.html', error="No file selected")
 
-@app.route('/search_keywords',methods=['POST','GET'])
+    if file.content_type == 'text/plain':
+        text = file.read().decode('utf-8', errors='ignore')
+        cleaned_text = preprocess_text(text)
+        keywords = get_keywords(cleaned_text, 20)
+        return render_template('keywords.html', keywords=keywords)
+    else:
+        return render_template('index.html')
+
+@app.route('/search_keywords', methods=['POST', 'GET'])
 def search_keywords():
-    search_query = request.form['search']
+    search_query = request.form.get('search')
     if search_query:
-      keywords = []         #if the search query is not empty
-      for keyword in feature_names:
-        keywords.append(keyword)
-        if len(keywords) == 20:  #the limit for the keywords is 20
-          break
-      print(keywords)
-      return render_template('keywords.html',keywords=keywords)  
-    else:      
-      return render_template('index.html')    #in case the search query is empty
-        
-#main function
+        keywords = feature_names[:20]  # Limit to top 20 feature names
+        print(keywords)
+        return render_template('keywords.html', keywords=keywords)
+    else:
+        return render_template('index.html')
+
+# Run the Flask application
 if __name__ == "__main__":
     app.run(debug=True)
