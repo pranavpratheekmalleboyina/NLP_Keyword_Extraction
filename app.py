@@ -22,12 +22,18 @@ app = Flask(__name__)
 try:
     # Loading the models
     count_vector = pickle.load(open('count_vector.pkl', 'rb'))
-    feature_names = pickle.load(open('feature_names.pkl', 'rb'))
+    #print(f"Count Vector:{count_vector}")
+    feature_names = pickle.load(open('feature_names.pkl', 'rb'))    
+    """ print(f"Is feature names a list instance?:{isinstance(feature_names, list)}")
+    print(f"Instance of feature names is {type(feature_names)}")
+    print(f"Is feature names invalid:{feature_names is None}")
+    print(f"Is feature names empty:{len(feature_names) == 0}")
+    print(f"feature names length:{len(feature_names)}") """
     tfidf_transformer = pickle.load(open('tfidf_transformer.pkl', 'rb'))
+    #print(f"Tf Idf Transformer:{tfidf_transformer}")
     
-    # Ensure feature_names is a non-empty list
-    if feature_names is None or not isinstance(feature_names, list) or len(feature_names) == 0:
-        raise ValueError("Feature names are either missing or not loaded correctly. Check the model files.")
+    """ if feature_names is None or len(feature_names) == 0:
+        raise ValueError("Feature names are either missing or not loaded correctly. Check the model files.") """
 
 except FileNotFoundError as e:
     print("Model file not found:", e)
@@ -86,10 +92,15 @@ def extract_keywords():
 @app.route('/search_keywords', methods=['POST', 'GET'])
 def search_keywords():
     search_query = request.form.get('search')
-    if search_query:
-        keywords = feature_names[:20]  # Limit to top 20 feature names
-        print(keywords)
-        return render_template('keywords.html', keywords=keywords)
+    global feature_names
+    if search_query:              #if search query is not empty
+        keywords = []
+        for keyword in feature_names:
+            if search_query.lower() in keyword.lower():
+                keywords.append(keyword)
+                if len(keywords) == 20:
+                    break
+        return render_template('keywordslist.html', keywords=keywords)
     else:
         return render_template('index.html')
 
