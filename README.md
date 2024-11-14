@@ -26,7 +26,7 @@ pip install -r requirements.txt
 ```
 
 4.**Download the NLTK stopwords and punkt data**
-```bash
+```python
 import nltk
 nltk.download("punkt")
 nltk.download("stopwords")
@@ -37,14 +37,33 @@ nltk.download("stopwords")
 python app.py
 ```
 The server would run on `http://127.0.0.1:5000`
+
 ## Usage
+1. Navigate to `http://127.0.0.1:5000` in your browser.
+2. Upload a file in `.txt` format or search the keyword that you want to search.
+3. View the extracted keywords in the results page.
 
 ## Folder Structure
+- **app.py:** Main application file <br>
+- **templates:/** HTML templates for rendering the web pages<br>
+    - `index.html`: The homepage where the file uploading and keyword searching.
+    - `keywords.html`:The page where the keyword results are displayed.
+- **static:** Folder for static files such as Javascript and CSS. 
 
 ## Dependencies
+- `Flask`: Web Framework for Python
+- `NLTK`: Library for text processing(tokens,stopwords)
+- `scikit-learn`: Provides CountVectorizer and TfIdfTransformer for keyword extraction.
+- `pickle`: Used to load and save pre-trained models (`tfidf_transformer.pkl`, `count_vector.pkl` and `feature_names.pkl`).
 
 ## Training Data 
+ The initial data was trained on text data from academic data. Preprocessing steps were applied to filter out custom stop words and transform text using stemming and tokenization.
 
 ## Model Files
+The project uses the following pickle files , used for loading the pre-trained model components:<br>
+- `feature_names.pkl`: contains a list of feature names obtained from the trained vocabulary.<br>
+- `count_vector.pkl`: contains the word vectors for the vocabulary. <br>
+- `tfidf_transformer.pkl`: for identifying the most significant keywords based on the tf-idf word scores.<br>
 
 ## Contribution
+Open for improvements and new ideas. If interested to contribute to this project, please fork the repository and submit a pull request.

@@ -22,18 +22,8 @@ app = Flask(__name__)
 try:
     # Loading the models
     count_vector = pickle.load(open('count_vector.pkl', 'rb'))
-    #print(f"Count Vector:{count_vector}")
     feature_names = pickle.load(open('feature_names.pkl', 'rb'))    
-    """ print(f"Is feature names a list instance?:{isinstance(feature_names, list)}")
-    print(f"Instance of feature names is {type(feature_names)}")
-    print(f"Is feature names invalid:{feature_names is None}")
-    print(f"Is feature names empty:{len(feature_names) == 0}")
-    print(f"feature names length:{len(feature_names)}") """
     tfidf_transformer = pickle.load(open('tfidf_transformer.pkl', 'rb'))
-    #print(f"Tf Idf Transformer:{tfidf_transformer}")
-    
-    """ if feature_names is None or len(feature_names) == 0:
-        raise ValueError("Feature names are either missing or not loaded correctly. Check the model files.") """
 
 except FileNotFoundError as e:
     print("Model file not found:", e)
