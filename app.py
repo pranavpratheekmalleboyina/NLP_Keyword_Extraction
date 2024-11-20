@@ -40,8 +40,8 @@ stop_words = list(stop_words.union(new_words))
 
 # Define routes
 @app.route('/')
-def index():
-    return render_template('index.html')
+def home():
+    return render_template('home.html')
 
 def get_keywords(docs, topN):
     # Transform document to get word counts
@@ -69,15 +69,15 @@ def preprocess_text(text):
 def extract_keywords():
     file = request.files.get('file')
     if not file or file.filename == '':
-        return render_template('index.html', error="No file selected")
+        return render_template('home.html', error="No file selected")
 
     if file.content_type == 'text/plain':
         text = file.read().decode('utf-8', errors='ignore')
         cleaned_text = preprocess_text(text)
         keywords = get_keywords(cleaned_text, 20)
-        return render_template('keywords.html', keywords=keywords)
+        return render_template('extractedkeywords.html', keywords=keywords)
     else:
-        return render_template('index.html')
+        return render_template('home.html')
 
 @app.route('/search_keywords', methods=['POST', 'GET'])
 def search_keywords():
@@ -90,9 +90,11 @@ def search_keywords():
                 keywords.append(keyword)
                 if len(keywords) == 20:
                     break
-        return render_template('keywordslist.html', keywords=keywords)
+        if len(keywords) == 0:
+            return render_template('emptykeywordslist.html')        
+        return render_template('searchedkeywordslist.html', keywords=keywords)
     else:
-        return render_template('index.html')
+        return render_template('home.html')
 
 # Run the Flask application
 if __name__ == "__main__":

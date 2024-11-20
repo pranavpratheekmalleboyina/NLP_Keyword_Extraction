@@ -8,7 +8,7 @@ This is a Flask based web application used for extracting keywords from a docume
 
 ## Installation
 
-1.**Clone the repository**:
+1. **Clone the repository**:
 ```bash
 git clone https://github.com/pranavpratheekmalleboyina/NLP_Keyword_Extraction.git
 cd NLP_Keyword_Extraction
@@ -25,7 +25,7 @@ source env/bin/activate
 pip install -r requirements.txt
 ```
 
-4.**Download the NLTK stopwords and punkt data**
+4. **Download the NLTK stopwords and punkt data**
 ```python
 import nltk
 nltk.download("punkt")
@@ -41,15 +41,18 @@ The server would run on `http://127.0.0.1:5000`
 ## Usage
 1. Navigate to `http://127.0.0.1:5000` in your browser.
 2. Upload a file in `.txt` format or search the keyword that you want to search.
-3. View the extracted keywords in the results page.
+3. View the result based on the action that you have performed.
 
 ## Folder Structure
 - **app.py:** Main application file <br>
-- **templates:/** HTML templates for rendering the web pages<br>
-    - `index.html`: The homepage where the file uploading and keyword searching.
-    - `keywords.html`:The page where the keyword results are displayed.
+- **templates/:** HTML templates for rendering the web pages<br>
+    - `home.html`: The homepage which contains the functionalities that we perform.
+    - `extractedkeywords.html`:The page where the keywords extracted from the file are displayed along with their frequencies.
+    - `searchedkeywordslist.html`:The page where the list of all words containing a particular keyword are displayed.
+    - `emptykeywordslist.html`:The page that is displayed when a particular keyword does not occur in the file selected.
 - **static:** Folder for static files such as Javascript and CSS. 
-
+- **Model Files**
+  
 ## Dependencies
 - `Flask`: Web Framework for Python
 - `NLTK`: Library for text processing(tokens,stopwords)
