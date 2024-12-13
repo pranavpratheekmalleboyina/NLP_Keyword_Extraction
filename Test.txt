@@ -1,0 +1,934 @@
+Multilinear Dynamical Systems
+for Tensor Time Series
+Mark Rogers
+Lei Li
+Stuart Russell
+EECS Department, University of California, Berkeley
+markrogersjr@berkeley.edu, {leili,russell}@cs.berkeley.edu
+
+Abstract
+Data in the sciences frequently occur as sequences of multidimensional arrays
+called tensors. How can hidden, evolving trends in such data be extracted while
+preserving the tensor structure? The model that is traditionally used is the linear
+dynamical system (LDS) with Gaussian noise, which treats the latent state and
+observation at each time slice as a vector. We present the multilinear dynamical
+system (MLDS) for modeling tensor time series and an expectation?maximization
+(EM) algorithm to estimate the parameters. The MLDS models each tensor observation in the time series as the multilinear projection of the corresponding member
+of a sequence of latent tensors. The latent tensors are again evolving with respect
+to a multilinear projection. Compared to the LDS with an equal number of parameters, the MLDS achieves higher prediction accuracy and marginal likelihood for
+both artificial and real datasets.
+
+1
+
+Introduction
+
+A tenet of mathematical modeling is to faithfully match the structural properties of the data; yet, on
+occasion, the available tools are inadequate to perform the task. This scenario is especially common
+when the data are tensors, i.e., multidimensional arrays: vector and matrix models are fitted to them
+without justification. This is, perhaps, due to the lack of an agreed-upon tensor model. There are
+many examples that seem to require such a model: The spatiotemporal grid of atmospheric data in
+climate modeling is a time series of n ? m ? l tensors, where n, m and l are the numbers of latitude,
+longitude, and elevation grid points. If k measurements?e.g., temperature, humidity, and wind
+speed for k=3?are made, then a time series of n ? m ? l ? k tensors is constructed. The daily high,
+low, opening, closing, adjusted closing, and volume of the stock prices of n multiple companies
+comprise a time series of 6 ? n tensors. A grayscale video sequence is a two-dimensional tensor
+time series because each frame is a two-dimensional array of pixels.
+Several queries can be made when one is presented with a tensor time series. As with any time
+series, a forecast of future data may be requested. For climate data, successful prediction may
+spell out whether the overall ocean temperatures will increase. Prediction of stock prices may not
+only inform investors but also help to stabilize the economy and prevent market collapse. The
+relationships between particular subsets of tensor elements could be of significance. How does the
+temperature of the ocean at 8? N, 165? E affect the temperature at 5? S, 125? W? For stock price data,
+one may investigate how the stock prices of electric car companies affect those of oil companies.
+For a video sequence, one might expect adjacent pixels to be more correlated than those far away
+from each other. Another way to describe the relationships among tensor elements is in terms of
+their covariances. Equipped with a tabulation of the covariances, one may read off how a given
+tensor element affects others. Later in this paper, we will define a tensor time series model and a
+covariance tensor that permits the modeling of general noise relationships among tensor elements.
+More formally, a tensor X ? RI1 ?????IM is a multidimensional array with elements that can each be
+indexed by a vector of positive integers. That is, every element Xi1 ???iM ? R is uniquely addressed
+1
+
+by a vector (i1 , ? ? ? , iM ) such that 1 ? im ? Im for all m. Each of the M dimensions of X is called
+a mode and represents a particular component of the data. The simplest tensors are vectors and
+matrices: vectors are tensors with only a single mode, while matrices are tensors with two modes.
+We will consider the tensor time series, which is an ordered, finite collection of tensors that all share
+the same dimensionality. In practice, each member of an observed tensor time series reflects the
+state of a dynamical system that is measured at discrete epochs.
+We propose a novel model for tensor time series: the multilinear dynamical system (MLDS). The
+MLDS explicitly incorporates the dynamics, noise, and tensor structure of the data by juxtaposing
+concepts in probabilistic graphical models and multilinear algebra. Specifically, the MLDS generalizes the states of the linear dynamical system (LDS) to tensors via a probabilistic variant of the
+Tucker decomposition. The LDS tracks latent vector states and observed vector sequences; this
+permits forecasting, estimation of latent states, and modeling of noise but only for vector objects.
+Meanwhile, the Tucker decomposition of a single tensor computes a latent ?core? tensor but has
+no dynamics or noise capabilities. Thus, the MLDS achieves the best of both worlds by uniting
+the two models in a common framework. We show that the MLDS, in fact, generalizes LDS and
+other well-known vector models to tensors of arbitrary dimensionality. In our experiments on both
+synthetic and real data, we demonstrate that the MLDS outperforms the LDS with an equal number
+of parameters.
+
+2
+
+Tensor algebra
+
+Let N be the set of all positive integers and R be the set of all real numbers. Given I ? NM ,
+where M ? N, we assemble a tensor-product space RI1 ?????IM , which will sometimes be written
+as RI = R(I1 ,...,IM ) for shorthand. Then a tensor X ? RI1 ?????IM is an element of a tensor-product
+space. A tensor X may be referenced by either a full vector (i1 , . . . , iM ) or a by subvector, using
+the ? symbol to indicate coordinates that are not fixed. For example, let X ? RI1 ?I2 ?I3 . Then
+Xi1 i2 i3 is a scalar, X?i2 i3 ? RI1 is the vector obtained by setting the second and third coordinates
+to i2 and i3 , and X??i3 ? RI1 ?I2 is the matrix obtained by setting the third coordinate to i3 . The
+concatenation of two M -dimensional vectors I = (I1 , . . . , IM ) and J = (J1 , . . . , JM ) is given by
+IJ = (I1 , . . . , IM , J1 , . . . , JM ), a vector with 2M entries.
+Let X ? RI1 ?????IM , M ? N. The vectorization vec(X) ? RI1 ???IM is obtained by shaping the
+tensor into a vector. In particular, the elements of vec(X) are given by vec(X)k = Xi1 ???iM , where
+PM Qm?1
+k = 1 + m=1 n=1 In (im ? 1). For example, if X ? R2?3?2 is given by
+
+
+
+
+1 3 5
+7 9 11
+X??1 =
+, X??2 =
+,
+2 4 6
+8 10 12
+T
+
+then vec(X) = (1 2 3 4 5 6 7 8 9 10 11 12) .
+Let I, J ? NM , M ? N. The matricization mat(A) ? RI1 ???IM ?J1 ???JM of a tensor A ? RIJ
+PM Qm?1
+is given by mat(A)kl = Ai1 ???iM j1 ???jM , where k = 1 + m=1 n=1 In (im ? 1) and l = 1 +
+PM Qm?1
+m=1
+n=1 Jn (jm ? 1). The matricization ?flattens? a tensor into a matrix. For example, define
+A ? R2?2?2?2 by
+
+
+
+
+
+
+
+
+1 3
+5 7
+9 11
+13 15
+A??11 =
+, A??21 =
+, A??12 =
+, A??22 =
+.
+2 4
+6 8
+10 12
+14 16
+?
+?
+1 5 9 13
+? 2 6 10 14 ?
+Then we have mat(A) = ?
+.
+3 7 11 15 ?
+4 8 12 16
+The vec and mat operators put tensors in bijective correspondence with vectors and matrices. To
+define the inverse of each of these operators, a reference must be made to the dimensionality of the
+original tensor. In other words, given X ? RI and A ? RIJ , where I, J ? NM , M ? N, we have
+?1
+X = vec?1
+I (vec(X)) and A = matIJ (mat(A)).
+Let I, J ? NM , M ? N. The factorization of a tensor A ? RIJ is given by Ai1 ???iM j1 ???jM =
+QM
+(m)
+(m)
+? RIm ?Jm for all m. The factorization exponentially reduces the
+m=1 Aim jm , where A
+2
+
+QM
+PM
+number of parameters needed to express A from m=1 Im Jm to m=1 Im Jm . In matrix form, we
+have mat(A) = A(M ) ? A(M ?1) ? ? ? ? ? A(1) , where ? is the Kronecker matrix product [1]. Note
+that tensors in RIJ are not factorizable in general [2].
+IJ
+J
+M
+The product A ~ X of
+Ptwo tensors A ? R and X ? R , where I, J ? N , M ? N, is given
+by (A ~ X)i1 ???iM = j1 ???jM Ai1 ???iM j1 ???jM Xj1 ???jM . The tensor A is called a multilinear operator
+when it appears in a tensor product as above. The product is only defined if the dimensionalities of
+the last M modes of A match the dimensionalities of X. Note that this tensor product generalizes
+the standard matrix-vector product in the case M = 1.
+
+We shall primarily work with tensors in their vector and matrix representations. Hence, we appeal
+to the following
+Lemma 1. Let I, J ? NM , M ? N, A ? RIJ , X ? RJ . Then
+vec(A ~ X) = mat(A) vec(X) .
+Furthermore, if A is factorizable with matrices A , then
+h
+i
+vec(A ~ X) = A(M ) ? ? ? ? ? A(1) vec(X) .
+
+(1)
+
+(m)
+
+(2)
+
+PM Qm?1
+PM Qm?1
+Proof. Let k = 1 + m=1 n=1 In (im ? 1) and l = 1 + m=1 n=1 Jn (jm ? 1) for some
+(j1 , . . . , jM ). We have
+X
+X
+vec(A ~ X)k =
+Ai1 ???iM j1 ???jM Xj1 ???jM =
+mat(A)kl vec(X)l = (mat(A) vec(X))k ,
+j1 ???jM
+
+l
+
+which holds for all 1 ? im ? Im , 1 ? m ? M . Thus, (1) holds. To prove (2), we express mat(A)
+as the Kronecker product of M matrices A(1) , . . . , A(M ) .
+The Tucker decomposition can be expressed using the product ~ defined above.
+The
+Tucker decomposition models a given tensor X ? RI1 ?????IM as the result of a multilinear transformation that is applied to a latent core tensor Z ? RJ1 ?????JM : X = A ~ Z.
+The multilinear operator A is a factorizable tensor such that
+A(3) mat(A) = A(M ) ?A(M ?1) ?? ? ??A(1) ,. where A(1) , . . . , A(M )
+are projection matrices (Figure 1). The canonical decomposi=
+tion/parallel factors (CP) decomposition is a special case of the
+(1)
+(2)
+X
+Z A Tucker decomposition in which Z is ?superdiagonal?, i.e., J1 =
+A
+Figure 1: The Tucker decomposi- ? ? ? = JM = R and only the Zj1 ???jM such that j1 = ? ? ? = jM
+tion of a third-order tensor X.
+can be nonzero. The CP decomposition expresses X as a sum
+PR
+(m)
+(M )
+(1)
+X = r=1 ur ? ? ? ? ? ur , where ur ? RIm for all m and r and ? denotes the tensor outer
+product [3].
+To illustrate, consider the case M = 2 and let X = A~Z, where X ? Rn?m and Z ? Rp?q . Then
+X = AZB T , where mat(A) = B ? A. If p ? n and q ? m, then Z is a dimensionality-reduced
+version of X: the matrix A increases the number of rows of Z from p to n via left-multiplication,
+while the matrix B increases the number of columns of Z from q to m via right-multiplication. To
+reconstruct X, we simply apply A ~ Z. See Figure 1 for an illustration of the case M = 3.
+
+3
+
+Random tensors
+
+Given I ? NM , M ? N, we define a random tensor X ? RI1 ?????IM as follows. Suppose vec(X)
+is normally distributed with expectation vec(U) and positive-definite covariance mat(S), where U ?
+RI and S ? RII . Then we say that X has the normal distribution with expectation U ? RI and
+covariance S ? RII and write X ? N (U, S). The definition of the normal distribution on tensors
+can thus be restated more succinctly as
+X ? N (U, S) ?? vec(X) ? N (vec U, mat S) .
+
+(3)
+
+Our formulation extends the normal distribution defined in [4], which is restricted to symmetric,
+second-order tensors.
+3
+
+We will make use of an important special case of the normal distribution defined on tensors: the
+multilinear Gaussian distribution. Let I, J ? NM , M ? N, and suppose X ? RI and Z ? RJ are
+jointly distributed as
+Z ? N (U, G) and X | Z ? N (C ~ Z, S) ,
+(4)
+where C ? RIJ . The marginal distribution of X and the posterior distribution of Z given X are given
+by the following result.
+Lemma 2. Let I, J ? NM , M ? N, and suppose the joint distribution of random tensors X ? RI
+and Z ? RJ is given by (4). Then the marginal distribution of X is
+
+X ? N C ~ U, C ~ G ~ CT + S ,
+(5)
+where CT ? RJI and CTj1 ???jM i1 ???iM = Ci1 ???iM j1 ???jM . The conditional distribution of Z given X is
+
+
+? G
+? ,
+Z | X ? N U,
+(6)
+? = vec?1 (? + W (vec(X) ? mat(C) ?)), G
+? = mat?1 (? ? W mat(C) ?), ? = vec(U),
+where U
+J
+JJ
+h
+i?1
+T
+T
+? = mat(G), ? = mat(S), and W = ?mat(C) mat(C) ?mat(C) + ?
+.
+Proof. Lemma 1, (3), and (4) imply that the vectorizations of Z and X given Z follow vec(Z) ?
+N (?, ?) and vec(X) | vec(Z) ? N (mat(C) vec(Z) , ?). By the properties of the multivariate
+normal distribution, the marginal distribution of vec(X) and the conditional distribution of vec(Z)
+T
+given vec(X) are vec(X) ? N (mat(C) vec(U), mat(C) ?mat(C) + ?) and vec(Z) | vec(X) ?
+T
+? mat(G)).
+?
+N (vec(U),
+The associativity of ~ implies that mat(C ~ G ~ CT ) = mat(C) ?mat(C) .
+Finally, we apply Lemma 1 once more to obtain (5) and (6).
+
+4
+
+Multilinear dynamical system
+
+The aim is to develop a model of a tensor time series X1 , . . . , XN that takes into account tensor
+structure. In defining the MLDS, we build upon the results of previous sections by treating each
+Xn as a random tensor and relating the model components with multilinear transformations. When
+the MLDS components are vectorized and matricized, an LDS with factorized transition and projection matrices is revealed. Hence, the strategy for fitting the MLDS is to vectorize each Xn , run the
+expectation-maximization (EM) algorithm of the LDS for all components but the matricized transition and projection tensors?which are learned via an alternative gradient method?and finally convert
+all model components back to tensor form.
+4.1
+
+Definition
+
+Let I, J ? NM , M ? N. The MLDS model consists of a sequence Z1 , . . . , ZN of latent tensors,
+where Zn ? RJ1 ?????JM for all n. Each latent tensor Zn emits an observation Xn ? RI1 ?????IM .
+The system is initialized by a latent tensor Z1 distributed as
+Z1 ? N (U0 , Q0 ) .
+
+(7)
+
+Given Zn , 1 ? n ? N ? 1, we generate Zn+1 according to the conditional distribution
+Zn+1 | Zn ? N (A ~ Zn , Q) ,
+
+(8)
+
+where Q is the conditional covariance shared by all Zn , 2 ? n ? N , and A is the transition tensor
+which describes the dynamics of the evolving sequence Z1 , . . . , ZN . The transition tensor A is
+factorized into M matrices A(m) , each of which acts on a mode of Zn . In matrix form, we have
+mat(A) = A(M ) ? ? ? ? ? A(1) . To each Zn there corresponds an observation Xn generated by
+Xn | Zn ? N (C ~ Zn , R) ,
+
+4
+
+(9)
+
+Z1 Z2
+X1 X2
+
+Zn
+...
+
+Zn+1
+
+...
+
+Xn+1
+
+ZN
+XN
+
+where R is the covariance shared by all Xn and C is the projection tensor which multilinearly transforms the latent tensor Zn .
+Like the transition tensor A, the projection tensor C is factorizable, i.e., mat(C) = C (M ) ? ? ? ? ? C (1) . See Figure 2 for an
+illustration of the MLDS.
+
+By vectorizing each Xn and Zn , the MLDS becomes an LDS
+with factorized transition and projection matrices mat(A) and
+mat(C). For the LDS, the transition and projection operators are
+not factorizable in general [2]. The factorizations of A and C
+for the MLDS not only allow for a generalized dimensionality
+reduction of tensors but exponentially reduce the number of parameters of the transition and projecQM
+QM
+2
+tion operators from |ALDS | + |C LDS | = m=1 Jm
++ m=1 Im Jm down to |AMLDS | + |CMLDS | =
+PM
+P
+M
+2
+m=1 Jm +
+m=1 Im Jm .
+
+Xn
+Figure 2: Schematic of the MLDS
+with three modes.
+
+4.2
+
+Parameter estimation
+
+Given a sequence of observations X1 , . . . , XN , we wish to fit the MLDS model by estimating
+? = (U0 , Q0 , Q, A, R, C). Because the MLDS model contains latent variables Zn , we cannot directly maximize the likelihood of the data with respect to ?. The EM algorithm circumvents this
+difficulty by iteratively updating (E(Z1 ), . . . , E(ZN )) and ? in an alternating manner until the expected, complete likelihood of the data converges [5]. The normal distribution of tensors (3) will
+facilitate matrix and vector computations rather than compel us to work directly with tensors. In
+particular, we can express the complete likelihood of the MLDS model as
+L (? | Z1 , X1 , . . . , ZN , XN ) = L (vec ? | vec Z1 , vec X1 , . . . , vec ZN , vec XN ) ,
+(10)
+where vec ? = (vec U0 , mat Q0 , mat Q, mat A, mat R, mat C). It follows that the vectorized MLDS
+is an LDS that inherits the Kalman filter updates for the E-step and the M-step for all parameters
+except mat A and mat C. See [6] for the EM algorithm of the LDS.
+Because A and C are factorizable, an alternative to the standard LDS updates is required. We
+locally maximize the expected, complete log-likelihood
+by computing the gradient with respect to
+P
+the vector v = [vec C (1)T ? ? ? vec C (M )T ]T ? R m Im Jm , which is obtained by concatenating the
+vectorizations of the projection matrices C (m) . The expected, complete log-likelihood (with terms
+constant with respect to C deleted) can be written as
+n
+h
+io
+T
+l(v) =tr ?mat(C) ?mat(C) ? 2?T ,
+(11)
+? ?1 , ? = PN E(vec Zn vec ZT ), and ? = PN vec (Xn )E(vec Zn )T . Now
+where ? = mat(R)
+n
+n=1
+n=1
+(m)
+let k correspond to some Cij and let ?ij ? RIm ?Jm be the indicator matrix that is one at the
+P
+(i, j)th entry and zero elsewhere. The gradient ?l(v) ? R m Im Jm is given elementwise by
+n
+h
+io
+T
+?l(v)k = 2tr ??vk mat(C) ?mat(C) ? ?T ,
+(12)
+where ?vk mat(C) = C (M ) ? ? ? ? ? ?ij ? ? ? ? ? C (1) [1]. If m = M , then we can exploit
+Q the sparsity
+of ?vk mat(C) by computing the trace of the product of two submatrices each with n6=M In rows
+Q
+and n6=M Jn columns:
+h
+
+iT
+?l(v)k = 2tr C (M ?1) ? ? ? ? ? C (1) ?ij ,
+(13)
+Q
+where ?ij is the submatrix of ? [mat(C) ? ? ?] with row indices (1, . . . , n6=M In ) shifted by
+Q
+Q
+Q
+n6=M In (i ? 1) and column indices (1, . . . ,
+n6=M Jn ) shifted by
+n6=M Jn (j ? 1). If m 6= M ,
+then the ordering of the modes can be replaced by 1, . . . , m ? 1, m + 1, . . . , M, m and the rows and
+columns of ? [mat(C) ? ? ?] can be permuted accordingly. In other words, the original tensors Xn
+are ?rotated? so that the mth mode becomes the M th mode.
+The M-step for A can be computed in a manner analogous to that of C by replacing I by J, replacing
+?1
+mat(C) by
+mat(A), and substituting
+v = [vec(Ah(1) )T ? ? ? vec(A(M ) )T i]T , ? = mat(Q) , ? =
+i
+PN ?1 h
+PN ?1
+T
+T
+into (11).
+n=1 E vec(Zn ) vec(Zn ) , and ? =
+n=1 E vec(Zn+1 ) vec(Zn )
+5
+
+4.3
+
+Special cases of the MLDS and their relationships to existing models
+
+It is clear that the MLDS is exactly an LDS in the case M = 1. Certain constraints on the MLDS
+also lead to generalizations of factor analysis, probabilistic principal components analysis (PPCA),
+the CP decomposition, and the matrix factorization model of collaborative filtering (MF). Let p =
+QM
+QM
+m=1 Jm . If A = 0, U0 = 0, and Q0 = Q, then the Xn of the MLDS become
+m=1 Im and q =
+independent and identically distributed draws from the multilinear Gaussian distribution. Setting
+mat(Q) = Idq and mat(R) to a diagonal matrix results in a model that reduces to factor analysis
+in the case M = 1. A further constraint on R, mat(R) = ?2 Idp , yields a multilinear extension of
+PPCA. Removing the constraints on R and forcing mat(Zn ) = Idq for all n results in a probabilistic
+CP decomposition in which the tensor elements have general covariances. Finally, the constraint
+M = 2 yields a probabilistic MF.
+
+5
+
+Experimental results
+
+To determine how well the MLDS could model tensor time series, the fits of the MLDS were compared to those of the LDS for both synthetic and real data. To avoid unnecessary complexity and
+highlight the difference between the two models?namely, how the transition and projection operators are defined?the noises in the models are isotropic. The MLDS parameters are initialized so
+that U0 is drawn from the standard normal distribution, the matricizations of the covariance tensors are identity matrices, and the columns of each A(m) and C (m) are the first Jm eigenvectors of
+singular-value-decomposed matrices with entries drawn from the standard normal distribution. The
+LDS parameters are initialized in the same way by setting M = 1.
+The prediction error and convergence in likelihood were measured for each dataset. For the
+synthetic dataset, model complexity was also measured. The prediction error M
+n of a given
+th
+model M for the n
+member
+of
+a
+tensor
+time
+series
+X
+,
+.
+.
+.
+,
+X
+is
+the
+relative
+Euclidean
+dis1
+N
+
+ / ||Xn ||, where ||?|| = ||vec(?)|| . Each estimate XM
+=
+is given by XM
+tance Xn ? XM
+n
+n
+n
+2
+ M 
+
+ M 
+M
+M n
+is
+the
+estimate
+of
+the
+latent
+state
+,
+where
+E
+Z
+vec?1
+mat
+C
+mat
+A
+vec
+E
+Z
+Ntrain
+Ntrain
+I
+of the last member of the training sequence. The convergence in likelihood of each model is determined by monitoring the marginal likelihood as the number of EM iterations increases. Each model
+is allowed to run until the difference between consecutive log-likelihood values is less than 0.1%
+of the latter value. Lastly, the model complexity is determined by observing how the likelihood
+and prediction error of each model vary as the model size |?M | increases. Aside from the model
+complexity experiment, the LDS latent dimensionality is always set to the smallest value such that
+the number of parameters of the LDS is greater than or equal to that of the MLDS.
+5.1
+
+Results for synthetic data
+
+The synthetic dataset is an MLDS with dimensions I = (7, 11), J = (3, 5), and N = 1100 and
+parameters initialized as described in the first paragraph of this section. For the prediction error and
+convergence analyses, the latent dimensionality of the MLDS for fitting was set to J = (3, 5) as
+well. Each model was trained on the first 1000 elements and tested on the last 100 elements of the
+sequence. The results are shown in Figure 3. According to Figure 3(a), the prediction error of MLDS
+matches that of the true model and is below that of the LDS. Furthermore, the MLDS converges to
+the likelihood of the true model, which is greater than that of the LDS (see Figure 3(b)). As for
+model complexity, the model size needed for the MLDS to match the likelihood and prediction error
+of the true model is much smaller than that of the LDS (see Figure 3(c) and (d)).
+5.2
+
+Results for real data
+
+We consider the following datasets:
+SST: A 5-by-6 grid of sea-surface temperatures from 5? N, 180? W to 5? S, 110? W recorded hourly
+from 7:00PM on 4/26/94 to 3:00AM on 7/19/94, yielding 2000 epochs [7].
+Tesla: Opening, closing, high, low, and volume of the stock prices of 12 car and oil companies
+(e.g., Tesla Motors Inc.), from 6/29/10 to 5/10/13 (724 epochs).
+NASDAQ-100: Opening, closing, adjusted-closing, high, low, and volume for 20 randomlychosen NASDAQ-100 companies, from 1/1/05 to 12/31/09 (1259 epochs).
+6
+
+5
+
+6
+
+1020
+
+1060
+Time slice
+
+?3
+0
+
+5
+10
+15
+20
+Number of EM iterations
+
+100
+LDS
+MLDS
+true
+
+50
+
+0
+0
+
+1000
+2000
+Number of parameters
+
+1000
+2000
+Number of parameters
+
+(c)
+(d)
+
+
+
+
+Xn ? XM
+ / ||Xn || is shown as a function of
+Figure 3: Results for synthetic data. Prediction error M
+n =
+n
+the time slice n in (a), convergence of marginal log-likelihood is shown in (b), marginal log-likelihood as a
+P train +Ntest M
+function of model size is shown in (c), and cumulative prediction error N
+n=Ntrain+1 n as a function of model
+size is shown in (d) for LDS, MLDS, and the true model.
+
+20
+
+0.8
+
+0.8
+
+0.6
+0.4
+0.2
+
+1850 1900 1950 2000
+Time slice
+
+(b) Tesla
+
+4
+
+?8
+
+5
+10 15 20 25
+Number of EM iterations
+
+(e) SST
+
+Log?likelihood
+
+Log?likelihood
+
+LDS
+MLDS
+
+0
+
+1230
+1250
+Time slice
+
+LDS
+MLDS
+
+?6
+
+?3
+
+10
+20
+30
+40
+Number of EM iterations
+
+(f) Tesla
+
+5
+
+?0.5 x 10
+
+?1
+?2
+
+1050 1100 1150
+Time slice
+
+(d) Video
+
+0 x 10
+
+?4
+
+?8
+
+1210
+
+50
+
+5
+
+?2 x 10
+
+?6
+
+LDS
+MLDS
+
+100
+
+(c) NASDAQ-100
+
+4
+
+?4 x 10
+
+LDS
+MLDS
+
+0.6
+
+0.2
+
+705 710 715 720
+Time slice
+
+(a) SST
+
+150
+
+0.4
+
+LDS
+MLDS
+
+Log?likelihood
+
+0
+
+1
+
+Error
+
+40
+
+1
+
+Error
+
+LDS
+MLDS
+
+Error
+
+Error
+
+60
+
+(b)
+
+LDS
+MLDS
+20
+40
+60
+Number of EM iterations
+
+(g) NASDAQ-100
+
+Log?likelihood
+
+(a)
+
+LDS
+MLDS
+true
+
+?2
+
+Cumulative error
+
+LDS
+MLDS
+true
+
+?2
+
+?4
+
+1100
+
+Log?likelihood
+
+Log?likelihood
+
+Error
+
+LDS
+MLDS
+true
+
+0.5
+
+0
+
+?1 x 10
+
+0 x 10
+
+1
+
+?1
+LDS
+MLDS
+?1.5
+
+20
+40
+60
+Number of EM iterations
+
+(h) Video
+
+Figure 4: Results for LDS and MLDS applied to real data. The first row corresponds to prediction error M
+n
+as a function of the time slice n, while the second corresponds to convergence in log-likelihood. Sea-surface
+temperature, Tesla, NASDAQ-100, and Video results are given by the respective columns.
+
+Video: 1171 grayscale frames of ocean surf during low tide. This dataset was chosen because it
+records a quasiperiodic natural scene.
+For each dataset, MLDS achieved higher prediction accuracy and likelihood than LDS. For the SST
+dataset, each model was trained on the first 1800 epochs; occlusions were filled in using linear
+interpolation and refined with an extra step during the learning that replaced the estimates of the
+occluded values by the conditional expectation given all the training data. For results when the
+MLDS dimensionality is set to (3, 3), see Figure 4(a) and (e). For the Tesla dataset, each time series
+((X1 )ij , . . . , (XN )ij ) were normalized prior to learning by subtracting by the mean and dividing by
+the standard deviation. Each model was trained on the first 700 epochs. See Figure 4(b) and (f) for
+results when the MLDS dimensionality is set to (5, 2). For the NASDAQ-100 dataset, each model
+was trained on the first 1200 epochs. The data were normalized in the same way as with the Tesla
+dataset. For results when the MLDS dimensionality is set to (10, 3), see Figure 4(c) and (g). For the
+Video dataset, a 100-by-100 patch was selected, spatially downsampled to a 10-by-10 patch for each
+frame, and normalized as before. Each model was trained on the first 1000 frames. See Figure 4(d)
+and (h) for results when the MLDS dimensionality is set to (5, 5).
+
+6
+
+Related work
+
+Several existing models can be fitted to tensor time series. If each tensor is ?vectorized?, i.e., reexpressed as a vector so that each element is indexed by a single positive integer, then an LDS can be
+applied [8, 6]. An obvious limitation of the LDS for modeling tensor time series is that the tensor
+structure is not preserved. Thus, it is less clear how the latent vector space of the LDS relates to the
+various tensor modes. Further, one cannot postulate a latent dimension for each mode as with the
+MLDS. The net result, as we have shown, is that the LDS requires more parameters than the MLDS
+to model a given system (assuming it does have tensor structure).
+7
+
+Dynamic tensor analysis (DTA) and Bayesian probabilistic tensor factorization (BPTF) are explicit
+models of tensor time series [9, 10]. For DTA, a latent, low-dimensional ?core? tensor and a set of
+projection matrices are learned by processing each member Xn ? RI1 ?????IQM of the sequence as
+(m)
+follows. For each mode m, the tensor is flattened into a matrix Xn ? R( k6=m Ik )?Im and then
+(m)T (m)
+multiplied by its transpose. The result Xn Xn is added to a matrix S (m) that has accumulated
+the flattenings of the previous n ? 1 tensors. The eigenvalue decomposition U ?U T of the updated
+S (m) is then computed and the mth projection matrix is given by the first rank S (m) columns of
+U . After this procedure is carried out for each mode, the core tensor is updated via the multilinear
+transformation given by the Tucker decomposition. Like the LDS, DTA is a sequential model. An
+advantage of DTA over the LDS is that the tensor structure of the data is preserved. A disadvantage
+is that there is no straightforward way to predict future terms of the tensor time series. Another
+disadvantage is that there is no mechanism that allows for arbitrary noise relationships among the
+tensor elements. In other words, the noise in the system is assumed to be isotropic.
+Other families of isotropic models have been devised that ?tensorize? the time dimension by concatenating the tensors in the time series to yield a single new tensor with an additional temporal
+mode. These models include multilinear principal components analysis [11], the memory-efficient
+Tucker algorithm [12], and Bayesian tensor analysis [13]. For fitting to data, such models rely on
+alternating optimization methods, such as alternating least squares, which are applied to each mode.
+BPTF allows for prediction and more general noise modeling than DTA. BPTF is a multilinear extension of collaborative filtering models [14, 15, 16] that concatenates the members of the tensor time series (Xn ), Xn ? RI1 ?????IM , to yield a higher-order tensor R ?
+RI1 ?????IM ?K , where K is the sequence length. Each element of R is independently distributed
+(M )
+(1)
+as Ri1 ???iM k ? N (hui1 , . . . , uiM , Tk i, ??1 ), where h?, . . . , ?i denotes the tensor inner product
+and ? is a global precision parameter. Bayesian methods are then used to compute the canonicalPR
+(M )
+(1)
+decomposition/parallel-factors (CP) decomposition of R: R = r=1 ur ?? ? ??ur ?Tr , where ? is
+(m)
+the tensor outer product. Each ur is independently drawn from a normal distribution with expectation ?m and precision matrix ?m , while each Tr is recursively drawn from a normal distribution
+with expectation Tr?1 and precision matrix ?T . The parameters, in turn, have conjugate prior distributions whose posterior distributions are sampled via Markov-chain Monte Carlo for model fitting.
+Though BPTF supports prediction and general noise models, the latent tensor structure is limited.
+Other models with anisotropic noise include probabilistic tensor factorization (PTF) [17], tensor
+probabilistic independent component analysis (TPICA) [18], and generalized coupled tensor factorization (GCTF) [19]. As with BPTF, PTF and TPICA utilize the CP decomposition of tensors. PTF
+is fit to tensor data by minimizing a heuristic loss function that is expressed as a sum of tensor inner
+products. TPICA iteratively flattens the tensor of data, executes a matrix model called probabilistic
+ICA (PICA) as a subroutine, and decouples the factor matrices of the CP decomposition that are embedded in the ?mixing matrix? of PICA. GCTF relates a collection of tensors by a hidden layer of
+disconnected tensors via tensor inner products, drawing analogies to probabilistic graphical models.
+
+7
+
+Conclusion
+
+We have proposed a novel probabilistic model of tensor time series called the multilinear dynamical
+system (MLDS), based on a tensor normal distribution. By putting tensors and multilinear operators
+in bijective correspondence with vectors and matrices in a way that preserves tensor structure, the
+MLDS is formulated so that it becomes an LDS when its components are vectorized and matricized.
+In matrix form, the transition and projection tensors can each be written as the Kronecker product of
+M smaller matrices and thus yield an exponential reduction in model complexity compared to the
+unfactorized transition and projection matrices of the LDS. As noted in Section 4.3, the MLDS generalizes the LDS, factor analysis, PPCA, the CP decomposition, and low-rank matrix factorization.
+The results of multiple experiments that assess prediction accuracy, convergence in likelihood, and
+model complexity suggest that the MLDS achieves a better fit than the LDS on both synthetic and
+real datasets, given that the LDS has the same number of parameters as the MLDS.
+
+8
+
+References
+[1] Jan R. Magnus and Heinz Neudecker. Matrix Differential Calculus with Applications in Statistics and
+Econometrics. Wiley, revised edition, 1999.
+[2] Vin De Silva and Lek-Heng Lim. Tensor rank and the ill-posedness of the best low-rank approximation
+problem. SIAM Journal on Matrix Analysis and Applications, 30(3):1084?1127, 2008.
+[3] Tamara G. Kolda. Tensor decompositions and applications. SIAM Review, 51(3):455?500, 2009.
+[4] Peter J. Basser and Sinisa Pajevic. A normal distribution for tensor-valued random variables: applications
+to diffusion tensor MRI. IEEE Transactions on Medical Imaging, 22(7):785?794, 2003.
+[5] Arthur P. Dempster, Nan M. Laird, and Donald B. Rubin. Maximum likelihood from incomplete data via
+the EM algorithm. Journal of the Royal Statistical Society. Series B (Methodological), 39(1):1?38, 1977.
+[6] Christopher M. Bishop. Pattern Recognition and Machine Learning. Springer, 1st edition, 2006.
+[7] NOAA/Pacific Marine Environmental Laboratory. Tropical Atmosphere Ocean Project. http://www.
+pmel.noaa.gov/tao/data_deliv/deliv.html. Accessed: May 23, 2013.
+[8] Zoubin Ghahramani and Geoffrey E. Hinton. Parameter estimation for linear dynamical systems. Technical Report CRG-TR-96-2, University of Toronto Department of Computer Science, 1996.
+[9] Jimeng Sun, Dacheng Tao, and Christos Faloutsos. Beyond streams and graphs: dynamic tensor analysis.
+In Proceedings of the 12th ACM SIGKDD International Conference on Knowledge Discovery and Data
+Mining, pages 374?383. ACM, 2006.
+[10] Liang Xiong, Xi Chen, Tzu-Kuo Huang, Jeff Schneider, and Jaime G. Carbonell. Temporal collaborative
+filtering with Bayesian probabilistic tensor factorization. In Proceedings of SIAM Data Mining, 2010.
+[11] Haipin Lu, Konstantinos N. Plataniotis, and Anastasios N. Venetsanopoulos. MPCA: Multilinear principal
+components analysis of tensor objects. IEEE Transactions on Neural Networks, 19(1), 2008.
+[12] Tamara Kolda and Jimeng Sun. Scalable tensor decompositions for multi-aspect data mining. In Eighth
+IEEE International Conference on Data Mining. IEEE, 2008.
+[13] Dacheng Tao, Mingli Song, Xuelong Li, Jialie Shen, Jimeng Sun, Xindong Wu, Christos Faloutsos, and
+Stephen J. Maybank. Bayesian tensor approach for 3-D face modeling. IEEE Transactions on Circuits
+and Systems for Video Technology, 18(10):1397?1410, 2008.
+[14] Yehuda Koren, Robert Bell, and Chris Volinsky. Matrix factorization techniques for recommender systems. Computer, 42(8):30?37, 2009.
+[15] Ruslan Salakhutdinov and Andriy Mnih. Probabilistic matrix factorization. In Advances in Neural Information Processing Systems, volume 20, pages 1257?1264, 2008.
+[16] Ruslan Salakhutdinov and Andriy Mnih. Bayesian probabilistic matrix factorization using Markov chain
+Monte Carlo. In Proceedings of the 25th International Conference on Machine Learning. ACM, 2008.
+[17] Cyril Goutte and Massih-Reza Amini. Probabilistic tensor factorization and model selection. In Tensors,
+Kernels, and Machine Learning (TKLM 2010), pages 1?4, 2010.
+[18] Christian F. Beckmann and Stephen M. Smith. Tensorial extensions of independent component analysis
+for multisubject FMRI analysis. Neuroimage, 25(1):294?311, 2005.
+[19] Y. Kenan Yilmaz, A. Taylan Cemgil, and Umut Simsekli. Generalized coupled tensor factorization. In
+Neural Information Processing Systems. MIT Press, 2011.
+
+9
+
+
